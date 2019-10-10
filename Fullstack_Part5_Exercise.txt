@@ -1,0 +1,922 @@
+5.1 - 5.10 BlogList Frontend 
+
+import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
+import Login from "./Login_Axios.js"
+import Axios from "./Axios.js"
+import LoginForm from "./loginForm.js"
+import Togglable from "./Togglable.js"
+import MainInterface from "./mainInterface.js"
+import NewBlog from "./newblog.js"
+
+
+const Notification = (props) => {
+	const style = {
+		color: props.error === false ? "green" : "red"
+	}
+	
+	return(
+		<div style = {style}>
+			<h2>{props.message}</h2>
+		</div>
+	)
+}
+
+
+const App = () => {
+//*********************************************State*****************************************************
+	const [ username, setUserName ] = useState('')
+	const [ name, setName ] = useState('')
+	const [ password, setPassword ] = useState('')
+	const [ user, setUser ] = useState(null)
+	const [ newtitle, setNewTitle ] = useState('')
+	const [ newauthor, setNewAuthor ] = useState('')
+	const [ newurl, setNewURL ] = useState('')
+	const [ blogs, setBlogs ] = useState([])
+	const [ message, setMessage ] = useState(null)
+	const [ error, setError ] = useState(false)
+	const likes = 0	
+	const visible = false
+	
+//********************************************useEffect**************************************************	
+	useEffect(() => {
+		Axios
+			.getAll()
+			.then(res => setBlogs(res.sort((a,b) => b.likes-a.likes)))
+	}, [])
+	
+	useEffect(() => {
+		const loggedUser = window.localStorage.getItem('BlogUser')
+		if (loggedUser) {
+			const user = JSON.parse(loggedUser)
+			setUser(user)
+			Axios.setToken(user.token)
+		}
+	}, [])
+	
+
+//******************************************Handle Area************************************************* 
+	const handleLogin = async (event) => {
+		event.preventDefault()
+		
+		try {
+			const user = await Login({username, name, password})
+			 
+			setUser(user)
+		
+			Axios.setToken(user.token)
+
+			window.localStorage.setItem('BlogUser', JSON.stringify(user))
+			setUserName('')
+			setName('')
+			setPassword('')
+		} catch(error) {
+			console.log(error)
+			setError(true)
+			setMessage(error.response.data.error)
+			setTimeout(() => setMessage(null), 5000)
+		}
+	}
+	
+	const handleLogout = (event) => {
+		event.preventDefault()
+		setUser(null)
+		window.localStorage.removeItem('BlogUser')
+	}	
+		
+	const handleAddBlog = async (event) => {
+		try {
+			event.preventDefault()
+		
+			mainInterfaceRef.current.toggleVisibility()
+			
+			const newObject = {
+				title: newtitle,
+				author: newauthor,
+				url: newurl,
+				likes: likes,
+				visible: visible
+			}
+			
+			setError(false)
+			setMessage(`A new Blog ${newtitle} by ${newauthor} added`)
+				
+			await Axios.create(newObject)
+			setNewTitle('')
+			setNewAuthor('')
+			setNewURL('')
+			setTimeout(() => {
+				Axios
+					.getAll()
+					.then(res => setBlogs(res))
+			}, 2000)
+			setTimeout(() => setMessage(null), 5000)
+		} catch(error) {
+			setError(true)
+			setMessage(error.response.data.error)
+			setTimeout(() => setMessage(null), 5000)
+		}
+	}
+
+	const handleDelete = async (id) => {
+		
+		try {
+			const getOne = await Axios.getOne(id)
+			console.log(getOne)
+			const result = window.confirm("Do you really want to delete " + getOne.title)
+
+			if (result) {
+				await Axios.deleteObject(id)
+				const newBlogs = await blogs.filter(blog => blog.id !== id)
+
+				setBlogs(newBlogs)
+			}
+		} catch(error) {
+			setError(true)
+			setMessage(error.response.data.error)
+			setTimeout(() => setMessage(null), 5000)
+		}	
+	}
+
+	const handleLikesChange = async (id) => {
+		const blog = await blogs.find(b => b.id === id)
+		const updatedBlog = {...blog, likes: blog.likes + 1}
+		
+		// console.log(blog)
+		// console.log(updatedBlog)
+		// console.log(blog.user.name)
+		await Axios.update(id, updatedBlog)
+		setBlogs(blogs.map(b => b.id !== id ? b : updatedBlog))
+	}
+	
+	const handleVisibleChange = async (id) => {
+		const blog = await blogs.find(b => b.id === id)
+		const updatedBlog = {...blog, visible: !blog.visible}
+		
+		await Axios.update(id, updatedBlog)
+		setBlogs(blogs.map(b => b.id !== id ? b : updatedBlog))
+	}
+		
+	const handleUsernameChange = (event) => setUserName(event.target.value) 
+	const handleNameChange = (event) => setName(event.target.value) 
+	const handlePasswordChange = (event) => setPassword(event.target.value) 
+	const handleTitleChange = (event) => setNewTitle(event.target.value)
+	const handleAuthorChange = (event) => setNewAuthor(event.target.value)
+	const handleURLChange = (event) => setNewURL(event.target.value)
+	
+//*********************************************Interface************************************************* 
+	const loginForm = () => {
+		return (
+			<div>
+				<Togglable buttonLabel = "Login">
+					<Notification 
+						message = {message} 
+						error = {error} 
+					/>
+					<LoginForm
+						username = {username}
+						password = {password}
+						name = {name}
+						handleLogin = {handleLogin}
+						handleUsernameChange = {handleUsernameChange}
+						handleNameChange = {handleNameChange}
+						handlePasswordChange = {handlePasswordChange}
+					/>
+				</Togglable>
+			</div>
+		)
+	}
+	
+	const mainInterfaceRef = React.createRef()
+	
+	const mainInterface = () => {
+		return(
+			<div>
+				<h1>Welcome, Blogs!!!</h1>
+				<p>{user.name} logged in</p>
+				<Notification 
+					message = {message} 
+					error = {error} 
+				/>
+				<button onClick = {handleLogout}><h3>&nbsp;LogOut&nbsp;</h3></button>
+
+				<br />
+				<br />
+
+				<Togglable buttonLabel = "Add New Blog">
+					<NewBlog 
+						handleAddBlog = {handleAddBlog}
+						handleTitleChange = {handleTitleChange}
+						handleAuthorChange = {handleAuthorChange}
+						handleURLChange = {handleURLChange}
+						newtitle = {newtitle}
+						newauthor = {newauthor}
+						newurl = {newurl}
+					/>
+				</Togglable>
+					
+				<br />
+		
+				<Togglable buttonLabel = "Blogs" ref = {mainInterfaceRef}>
+					<MainInterface 
+						blogs = {blogs}
+						handleDelete = {handleDelete}
+						handleLikesChange = {handleLikesChange}
+						handleVisibleChange = {handleVisibleChange}
+					/>
+				</Togglable>
+			</div>
+		)
+	}
+	
+//***********************************************Return************************************************** 	
+	return(
+		<div>
+			<br />
+			<br />
+			<br />
+			
+			{
+				user === null 
+				? loginForm() 
+				: mainInterface() 
+			}
+			
+			<br />
+		</div>
+	)
+}
+
+
+ReactDOM.render(
+  <App />, 
+  document.getElementById('root'))
+==================================================================================================================================================
+import axios from "axios";
+const baseUrl = "http://localhost:3001/blogs"
+
+let token = null
+
+const setToken = (newToken) => {
+	token = `bearer ${newToken}`
+}
+
+const getAll = () => {
+	const request = axios.get(baseUrl)
+	return request.then(response => response.data)
+}
+
+const getOne = (id) => {
+	const request = axios.get(`${baseUrl}/${id}`)
+	return request.then(response => response.data)
+}
+
+const create = async (newObject) => {
+	const config = {
+		headers: { Authorization: token }
+	}
+	
+	const res = await axios.post(baseUrl, newObject, config)
+	return res.data
+}
+
+const update = (id, newObject) => {
+	const request = axios.put(`${baseUrl}/${id}`, newObject)
+	return request.then(response => response.data)
+}
+
+const deleteObject = async (id) => {
+	const config = {
+		headers: { Authorization: token }
+	}
+	
+	const res = await axios.delete(`${baseUrl}/${id}`, config)
+	return res.data
+}
+
+
+
+export default {setToken, getAll, getOne, create, update, deleteObject}
+=====================================================================================================================================================
+import React from "react";
+
+
+const MainInterface = (props) => {	
+	const blogStyle = {
+		width: 500,
+		border: 'solid',
+		borderWidth: 1,
+		borderColor: "black",
+		paddingLeft: 30,
+		marginTop: 10,
+		marginLeft: 10
+	}
+	
+
+	return(	
+		<div>
+			<br />
+			{props.blogs.map(blog => {
+				return(
+					<div key={blog.id} style = {blogStyle}>
+						<div onClick = {() => props.handleVisibleChange(blog.id)}>
+							<p>{blog.title}</p>
+						</div>
+							<div style = {{ display: blog.visible ? '' : 'none' }}>
+								<p>{blog.url}</p>
+								<p>Added by {blog.user.name}</p>
+								<p>{blog.likes}</p>
+								<button onClick = {() => props.handleLikesChange(blog.id)}>Likes</button>&nbsp;&nbsp;
+								<button onClick = {() => props.handleDelete(blog.id)}>Delete</button>
+							</div>					
+					</div>
+				)
+			})}
+		</div>
+	)
+}
+
+
+export default MainInterface
+======================================================================================================================================================
+import React from "react";
+
+
+const NewBlog = (props) => {
+	return(
+		<form onSubmit = {props.handleAddBlog} >
+			<h1>Create New Blog</h1>
+			<h3>Title: </h3>
+			<input type="text" name="Title" value={props.newtitle} onChange={props.handleTitleChange} />
+			<h3>Author: </h3>
+			<input type="text" name="Author" value={props.newauthor} onChange={props.handleAuthorChange} />
+			<h3>URL: </h3>
+			<input type="text" name="URL" value={props.newurl} onChange={props.handleURLChange} />	
+
+			<br />
+			<br />
+			<br />
+
+			<button type="submit"><h3>&nbsp;Create&nbsp;</h3></button>
+		</form>	
+	)
+}	
+
+
+export default NewBlog
+======================================================================================================================================================
+import React from "react";
+
+
+const LoginForm = (props) => {
+	return(
+		<div>
+			<h1>Login Account</h1>
+			<form onSubmit = {props.handleLogin} >
+				<h3>Username:</h3> 
+				<input type = "text" value = {props.username} name = "Username" onChange = {props.handleUsernameChange} />
+				
+				<h3>Name:</h3> 
+				<input type="text" value={props.name} name="Name" onChange = {props.handleNameChange} />
+				
+				<h3>Password:</h3> 
+				<input type="text" value={props.password} name="Password" onChange = {props.handlePasswordChange} />
+				
+				<br />
+				<br />
+				<br />
+			
+				<button type = "submit"><h3>&nbsp;&nbsp;Login&nbsp;&nbsp;</h3></button>
+			</form>
+		</div>	
+	)
+}
+
+
+export default LoginForm
+======================================================================================================================================================
+import React, { useState, useImperativeHandle } from 'react'
+
+
+const Togglable = React.forwardRef((props, ref) => {
+  const [visible, setVisible] = useState(false)
+
+  const hideWhenVisible = { display: visible ? 'none' : '' }
+  const showWhenVisible = { display: visible ? '' : 'none' }
+
+  const toggleVisibility = () => {
+    setVisible(!visible)
+  }
+  
+	useImperativeHandle(ref, () => {
+		return {
+			toggleVisibility
+		}
+	})
+
+  return (
+    <div>
+		<div style={hideWhenVisible}>
+			<button onClick={toggleVisibility}><h3>&nbsp;{props.buttonLabel}&nbsp;</h3></button>
+		</div>
+		<div style={showWhenVisible}>
+			{props.children}
+			<br />
+			<button onClick={toggleVisibility}><h3>&nbsp;cancel&nbsp;</h3></button>
+		</div>
+    </div>
+  )
+})
+
+
+export default Togglable
+=========================================================================================================================================================
+import axios from 'axios'
+
+const baseUrl = '/login'
+
+const Login = async (credentials) => {
+  const res = await axios.post(baseUrl, credentials)
+  console.log(res.data)
+  return res.data
+}
+
+export default Login
+
+
+
+5.11 - 5.12 BlogList Frontend
+
+import React from "react";
+import PropTypes from 'prop-types'
+
+
+const LoginForm = (props) => {
+	return(
+		<div>
+			<h1>Login Account</h1>
+			<form onSubmit = {props.handleLogin} >
+				<h3>Username:</h3> 
+				<input type = "text" value = {props.username} name = "Username" onChange = {props.handleUsernameChange} />
+				
+				<h3>Name:</h3> 
+				<input type="text" value={props.name} name="Name" onChange = {props.handleNameChange} />
+				
+				<h3>Password:</h3> 
+				<input type="text" value={props.password} name="Password" onChange = {props.handlePasswordChange} />
+				
+				<br />
+				<br />
+				<br />
+			
+				<button type = "submit"><h4>&nbsp;&nbsp;Login&nbsp;&nbsp;</h4></button>
+			</form>
+		</div>	
+	)
+}
+
+
+LoginForm.propTypes = {
+  handleLogin: PropTypes.func.isRequired,
+  handleUsernameChange: PropTypes.func.isRequired,
+  handlePasswordChange: PropTypes.func.isRequired,
+  handleNameChange: PropTypes.func.isRequired,
+  username: PropTypes.string.isRequired,
+  name: PropTypes.string.isRequired,
+  password: PropTypes.string.isRequired
+}
+
+
+export default LoginForm
+
+
+
+5.13 - 5.15 BlogList Tests
+
+import React from 'react'
+import '@testing-library/jest-dom/extend-expect'
+import { render,fireEvent } from '@testing-library/react'
+import { prettyDOM } from '@testing-library/dom'
+import SimpleBlog from './Note.js'
+
+describe('test BlogList', () => {
+	const blog = {
+		title: "Dabaobao",
+		author: "Sean",
+		likes: 10
+	}
+	
+	const mockHandler = jest.fn()
+	
+ 	let component 
+	
+	beforeEach(() => {
+		component = render(
+			<SimpleBlog blog = {blog} onClick = {mockHandler} />
+		)
+	})
+	
+	test('verify rendering blog\'s title and author', () => {
+		const div = component.container.querySelector('.a')
+		// console.log(prettyDOM(div))
+		expect(div).toHaveTextContent(
+			"Dabaobao Sean"
+		)
+	})
+	
+	test('verify rendering blog\'s likes', () => {
+		const div = component.container.querySelector('.b')
+		// console.log(prettyDOM(div))
+		expect(div).toHaveTextContent(10)
+	})
+	
+	test('verify button clicks', () => {
+		const button = component.getByText("like")
+		fireEvent.click(button)
+		fireEvent.click(button)
+		
+		expect(mockHandler.mock.calls.length).toBe(2)
+	})
+})
+
+*********************************************************************************************************************************************************
+
+import React from 'react'
+import '@testing-library/jest-dom/extend-expect'
+import { render,fireEvent } from '@testing-library/react'
+import { prettyDOM } from '@testing-library/dom'
+import SimpleBlog from './Note.js'
+import Togglable from './Togglable'
+
+
+describe('test BlogList', () => {
+	const blog = {
+		title: "Dabaobao",
+		author: "Sean",
+		likes: 10
+	}
+	
+	const mockHandler = jest.fn()
+	
+ 	let component 
+	
+	beforeEach(() => {
+		component = render(
+			<Togglable title = {blog.title} author = {blog.author}>
+				<SimpleBlog blog = {blog} />
+			</Togglable>
+		)
+	})
+
+	test('verify only name and author are shown by default', () => {
+		const div = component.container.querySelector('.a')
+		expect(div).toHaveTextContent(
+			"Dabaobao Sean"
+		)
+	})
+	
+	test('verify button clicked, others will be shown', () => {
+		const button = component.container.querySelector('.a')
+		fireEvent.click(button)
+		
+		const div = component.container.querySelector('.b')
+		expect(div).not.toHaveStyle('display: none')
+	})
+})
+
+
+
+
+5.18 - 5.20 Ultimate Hooks
+import { useState } from 'react'
+
+export const useField = (type) => {
+  const [value, setValue] = useState('')
+
+  const onChange = (event) => {
+    setValue(event.target.value)
+  }
+  
+  const reset = () => {
+	 setValue('') 
+  }
+
+  return {
+	  "input": {
+		  type,
+		  value,
+		  onChange
+	  },
+	  "reset": reset
+  }
+}
+*********************************************************************************************************************************************************
+import React, { useState, useEffect } from "react"
+import ReactDOM from "react-dom"
+import { useField } from "./Customhooks.js"
+
+
+const App = () => {
+	const username = useField('text')
+	const password = useField('text')
+	const title = useField('text')
+	const author = useField('test')
+	const url = useField('test')
+	
+	const handleLogin = (event) => {
+		event.preventDefault()
+		console.log(username.value, password.value)
+		username.reset()
+		password.reset()
+	}
+	
+	const handleAdd = (event) => {
+		event.preventDefault()
+		console.log(title.value, author.value, url.value)
+		title.reset()
+		author.reset()
+		url.reset()
+	}
+	
+	return(
+		<div>
+			<form>
+				username: <input {...username.input} />
+				password: <input {...password.input} />
+				<button onClick = {handleLogin}>Login</button>
+			</form>
+			
+			<br />
+			<br />
+			<br />
+			
+			<form>
+				title: <input {...title.input} />
+				author: <input {...author.input} />
+				url: <input {...url.input} />
+				<button onClick = {handleAdd}>Create</button>
+			</form>
+		</div>
+	)
+}
+
+
+ReactDOM.render(
+  <App />, 
+  document.getElementById('root'))
+
+
+
+5.21 Ultimate Hooks
+
+******************************************************************Frontend***************************************************************************************** 
+import React, {useEffect}from "react"
+import ReactDOM from "react-dom"
+import { useField, useResource } from "./Customhooks.js"
+
+
+const App = () => {
+	useEffect(() => {
+		noteService.getAll()
+	}, [])
+
+	useEffect(() => {
+		personService.getAll()
+	}, [])
+	
+	const note = useField('text')
+	const [ notes, noteService ] = useResource('http://localhost:3005/notes') 
+	const name = useField('text')
+	const number = useField('text')
+	const [ persons, personService ] = useResource('http://localhost:3005/persons')
+	
+	const handleNoteAdd = (event) => {
+		event.preventDefault()
+		
+		const newObject = {
+			content: note.input.value
+		}
+		
+		console.log(newObject)
+		noteService
+				.create(newObject)
+		
+		note.reset()
+	} 
+	
+	const handlePersonAdd = (event) => {
+		event.preventDefault()
+		
+		const newObject = {
+			name: name.input.value,
+			number: number.input.value
+		}
+		
+		console.log(newObject)
+		personService
+					.create(newObject)
+		
+		name.reset()
+		number.reset()
+	}
+	
+	
+	return(
+		<div>
+			<form onSubmit = {handleNoteAdd}>
+				<h1>Notes</h1>
+				<input {...note.input} />
+				<button type = "submit">Create</button>
+			</form>	
+			{notes.map(n => <p key = {n.id}>{n.content}</p>)}
+			
+			<br />
+			<br />
+			<br />
+			
+			<form onSubmit = {handlePersonAdd}>
+				<h1>Persons</h1>
+				Name: <input {...name.input} />
+				<br />
+				<br />
+				Number: <input {...number.input} />
+				<br />
+				<br />
+				<button type = "submit">Create</button>
+			</form>
+			{persons.map(p => <p key = {p.id}>{p.name}: {p.number}</p>)}
+		</div>
+	)
+}
+
+
+ReactDOM.render(
+  <App />, 
+  document.getElementById('root'))
+
+******************************************************************Custom Hooks***************************************************************************************** 
+import { useState } from 'react'
+import axios from 'axios'
+
+export const useField = (type) => {
+  const [value, setValue] = useState('')
+
+  const onChange = (event) => {
+    setValue(event.target.value)
+  }
+  
+  const reset = () => {
+	 setValue('') 
+  }
+
+  return {
+	  "input": {
+		  type,
+		  value,
+		  onChange
+	  },
+	  "reset": reset
+  }
+}
+
+
+export const useResource = (url) => {
+	const [value, setValue] = useState([])
+	
+	const baseUrl = url
+
+	const getAll = () => {
+		const request = axios.get(baseUrl)
+		request.then(res => setValue(res.data))
+	}
+
+	const create = async (newObject) => {
+		const response = await axios.post(baseUrl, newObject)
+		return response.data
+	}
+
+	const update = (id, newObject) => {
+		const request = axios.put(`${baseUrl}/${id}`, newObject)
+		return request.then(response => response.data)
+	}
+
+	return [ value, {
+		getAll,
+		create,
+		update
+	}]
+}
+******************************************************************Backend***************************************************************************************** 
+const express = require('express')
+const app = express()
+const cors = require('cors')
+const bodyParser = require('body-parser')
+
+app.use(bodyParser.json())
+app.use(cors())
+
+
+let notes = [
+	{
+		id: 100,
+		content: "HTML is easy",
+		date: "2019-05-30T17:30:31.098Z",
+		important: true
+	},
+	{
+		id: 101,
+		content: "Browser can execute only Javascript",
+		date: "2019-05-30T18:39:34.091Z",
+		important: false
+	},
+	{
+		id: 102,
+		content: "GET and POST are the most important methods of HTTP protocol",
+		date: "2019-05-30T19:20:14.298Z",
+		important: true
+	}
+]
+
+let persons = [
+	{ 
+		name: "Arto Hellas", 
+		number: "040123456",
+		id: 1
+	},
+	{ 
+		name: "Ada Lovelace", 
+		number: "39445323523",
+		id: 2
+	},
+	{ 
+		name: "Dan Abramov", 
+		number: "1243234345",
+		id: 3
+	},
+	{ 
+		name: "Mary Poppendieck", 
+		number: "39236423122",
+		id: 4
+	}
+]
+
+
+
+const generateNoteId = () => {
+  const maxId = notes.length > 0
+    ? Math.max(...notes.map(n => n.id))
+    : 0
+  return maxId + 1
+}
+
+app.get('/notes', (req, res) => {
+	res.json(notes)
+})
+
+app.post('/notes', (req, res) => {
+	const body = req.body
+	
+	const note = {
+		content: body.content,
+		date: new Date(),
+		important: true,
+		id: generateNoteId()
+	}
+	
+	notes = notes.concat(note)
+	
+	res.json(note)
+})
+
+
+
+const generatePersonId = () => {
+  const maxId = persons.length > 0
+    ? Math.max(...persons.map(p => p.id))
+    : 0
+  return maxId + 1
+}
+
+app.get('/persons', (req, res) => {
+	res.json(persons)
+})
+
+app.post('/persons', (req, res) => {
+	const body = req.body
+	
+	const person = {
+		name: body.name, 
+		number: body.number,
+		id: generatePersonId()
+	}
+	
+	persons = persons.concat(person)
+	
+	res.json(person)
+})
+
+
+const PORT = 3005
+app.listen(PORT, () => {
+	console.log(`Server running on port ${PORT}`)
+})
